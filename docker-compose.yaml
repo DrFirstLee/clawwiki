@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - ./db_data_new:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - claw-network
+
+  wiki:
+    image: ghcr.io/requarks/wiki:2
+    depends_on:
+      - db
+    # dns:
+    #   - 8.8.8.8
+    #   - 1.1.1.1
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      # UPGRADE_COMPANION: 1
+      TELEMETRY: "false"
+    restart: unless-stopped
+    networks:
+      - claw-network
+
+  proxy:
+    build: 
+      context: ./proxy
+      network: host
+    environment:
+      WIKI_URL: http://wiki:3000
+      BOT_API_KEY: ${BOT_API_KEY}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+    depends_on:
+      - wiki
+    restart: unless-stopped
+    networks:
+      - claw-network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      - proxy
+    networks:
+      - claw-network
+
+networks:
+  claw-network:
