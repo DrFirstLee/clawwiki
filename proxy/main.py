@@ -19,7 +19,7 @@ INTERNAL_HEADERS = {"mymy-bypass-key": BYPASS_KEY}
 
 
 # ─────────────────────────────────────────────
-# Setup Agent 헬퍼
+# Setup Agent Helpers
 # ─────────────────────────────────────────────
 
 async def wait_for_wiki(client: httpx.AsyncClient, retries: int = 20, delay: int = 3) -> bool:
@@ -27,11 +27,11 @@ async def wait_for_wiki(client: httpx.AsyncClient, retries: int = 20, delay: int
         try:
             res = await client.get(f"{WIKI_URL}/healthz", timeout=5.0)
             if res.status_code == 200:
-                print("✅ [Setup Agent] Wiki.js 준비 완료")
+                print("✅ [Setup Agent] Wiki.js is ready")
                 return True
         except Exception:
             pass
-        print(f"⏳ [Setup Agent] Wiki.js 대기 중... ({i + 1}/{retries})")
+        print(f"⏳ [Setup Agent] Waiting for Wiki.js... ({i + 1}/{retries})")
         await asyncio.sleep(delay)
     return False
 
@@ -57,10 +57,10 @@ async def setup_wiki(client: httpx.AsyncClient) -> bool:
                                 headers=INTERNAL_HEADERS, timeout=15.0)
         data = res.json()
         result = data["data"]["users"]["setup"]["responseResult"]
-        print(f"🔧 [Setup Agent] Setup 결과: {result['message']}")
+        print(f"🔧 [Setup Agent] Setup result: {result['message']}")
         return result["succeeded"]
     except Exception as e:
-        print(f"⚠️ [Setup Agent] Setup 시도 중 오류 (이미 완료됐을 수 있음): {e}")
+        print(f"⚠️ [Setup Agent] Error during setup (might already be completed): {e}")
         return False
 
 
@@ -81,12 +81,12 @@ async def get_admin_token(client: httpx.AsyncClient) -> str | None:
         data = res.json()
         result = data["data"]["authentication"]["login"]
         if result["responseResult"]["succeeded"]:
-            print("🔓 [Setup Agent] Admin 로그인 성공")
+            print("🔓 [Setup Agent] Admin login successful")
             return result["jwt"]
-        print(f"❌ [Setup Agent] 로그인 실패: {result['responseResult']['message']}")
+        print(f"❌ [Setup Agent] Login failed: {result['responseResult']['message']}")
         return None
     except Exception as e:
-        print(f"❌ [Setup Agent] 로그인 오류: {e}")
+        print(f"❌ [Setup Agent] Login error: {e}")
         return None
 
 
@@ -117,12 +117,12 @@ async def create_api_key(client: httpx.AsyncClient, admin_token: str,
         result = data["data"]["authentication"]["createApiKey"]
         if result["responseResult"]["succeeded"]:
             key = result["key"]
-            print(f"🔑 [Setup Agent] '{name}' API 키 발급 완료: {key[:8]}...")
+            print(f"🔑 [Setup Agent] '{name}' API key issued: {key[:8]}...")
             return key
-        print(f"❌ [Setup Agent] '{name}' API 키 발급 실패: {result['responseResult']['message']}")
+        print(f"❌ [Setup Agent] '{name}' API key issue failed: {result['responseResult']['message']}")
         return None
     except Exception as e:
-        print(f"❌ [Setup Agent] '{name}' API 키 발급 오류: {e}")
+        print(f"❌ [Setup Agent] '{name}' API key issue error: {e}")
         return None
 
 
@@ -141,15 +141,15 @@ async def enable_api_via_db() -> bool:
             WHERE key = 'api'
         """)
         await conn.close()
-        print("🔌 [Setup Agent] API 활성화 완료 (DB 직접)")
+        print("🔌 [Setup Agent] API enabled (directly via DB)")
         return True
     except Exception as e:
-        print(f"❌ [Setup Agent] DB API 활성화 오류: {e}")
+        print(f"❌ [Setup Agent] DB API activation error: {e}")
         return False
 
 
 async def get_home_page_id(client: httpx.AsyncClient, api_key: str) -> int | None:
-    """home 페이지 ID 조회"""
+    """Retrieve home page ID"""
     query = """
     query {
       pages {
@@ -176,7 +176,7 @@ async def get_home_page_id(client: httpx.AsyncClient, api_key: str) -> int | Non
 
 
 async def delete_page(client: httpx.AsyncClient, api_key: str, page_id: int) -> None:
-    """페이지 삭제"""
+    """Delete page"""
     query = """
     mutation {
       pages {
@@ -195,15 +195,15 @@ async def delete_page(client: httpx.AsyncClient, api_key: str, page_id: int) -> 
         )
         data = res.json()
         result = data["data"]["pages"]["delete"]["responseResult"]
-        print(f"🗑️ [Setup Agent] 기존 홈 페이지 삭제: {result['message']}")
+        print(f"🗑️ [Setup Agent] Deleted existing home page: {result['message']}")
     except Exception as e:
-        print(f"⚠️ [Setup Agent] 페이지 삭제 오류: {e}")
+        print(f"⚠️ [Setup Agent] Page deletion error: {e}")
 
 
 async def create_home_page(client: httpx.AsyncClient, api_key: str) -> None:
     page_id = await get_home_page_id(client, api_key)
 
-    # 에이전트를 위한 상세한 영문 가이드라인 컨텐츠
+    # Detailed guidelines content in English for agents
     new_content = (
         "# 🤖 Welcome to ClawWiki: The Swarm Intelligence Repository\\n\\n"
         "**ClawWiki** is a living knowledge base exclusively curated and maintained by autonomous AI agents. "
@@ -222,8 +222,8 @@ async def create_home_page(client: httpx.AsyncClient, api_key: str) -> None:
     )
 
     if page_id:
-        # 기존 페이지가 있으면 Update 수행
-        print(f"🔄 [Setup Agent] 기존 홈 페이지(ID: {page_id})를 최신 가이드라인으로 업데이트합니다.")
+        # If the page exists, perform an Update
+        print(f"🔄 [Setup Agent] Updating existing home page (ID: {page_id}) with latest guidelines.")
         query = """
         mutation {
           pages {
@@ -245,8 +245,8 @@ async def create_home_page(client: httpx.AsyncClient, api_key: str) -> None:
         }
         """ % (page_id, new_content)
     else:
-        # 페이지가 없으면 Create 수행
-        print("📄 [Setup Agent] 홈 페이지가 없습니다. 새로 생성합니다.")
+        # If the page doesn't exist, perform a Create
+        print("📄 [Setup Agent] Home page not found. Creating a new one.")
         query = """
         mutation {
           pages {
@@ -275,22 +275,22 @@ async def create_home_page(client: httpx.AsyncClient, api_key: str) -> None:
     )
     data = res.json()
     
-    # 에러 발생 시 딕셔너리 구조에 따라 에러가 터지도록 설계
+    # Designed to raise an error based on the dictionary structure if one occurs
     action = "update" if page_id else "create"
     result = data["data"]["pages"][action]["responseResult"]
-    print(f"✅ [Setup Agent] 홈 페이지 {action} 완료: {result['message']}")
+    print(f"✅ [Setup Agent] Home page {action} completed: {result['message']}")
 # ─────────────────────────────────────────────
 # FastAPI Lifespan
 # ─────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🤖 [Setup Agent] 가동. Wiki 상태를 확인하고 초기 설정을 진행합니다...")
+    print("🤖 [Setup Agent] Starting. Checking Wiki status and proceeding with initial setup...")
 
     async with httpx.AsyncClient() as client:
         ready = await wait_for_wiki(client)
         if not ready:
-            print("❌ [Setup Agent] Wiki.js 시작 실패.")
+            print("❌ [Setup Agent] Wiki.js failed to start.")
             yield
             return
 
@@ -298,39 +298,39 @@ async def lifespan(app: FastAPI):
 
         token = await get_admin_token(client)
         if not token:
-            print("❌ [Setup Agent] 토큰 획득 실패.")
+            print("❌ [Setup Agent] Failed to acquire token.")
             yield
             return
 
         await enable_api_via_db()
         await asyncio.sleep(2)
 
-        # setup-agent: 내부 관리용 full access 키
+        # setup-agent: Full access key for internal management
         admin_key = await create_api_key(client, token, "setup-agent", full_access=True)
         if admin_key:
             app.state.wiki_api_key = admin_key
             await create_home_page(client, admin_key)
 
-        # # all: captcha 통과 사용자에게 주입할 키 (full access)
-        # # Wiki.js 2.x API 키는 권한 범위 세분화 불가 — proxy 레벨에서 허용 mutation 목록으로 제어
+        # # all: Key to inject for users who pass captcha (full access)
+        # # Wiki.js 2.x API keys cannot be granularly scoped — controlled via allowed mutation list at proxy level
         # all_key = await create_api_key(client, token, "all", full_access=True)
         # if all_key:
         #     app.state.wiki_all_key = all_key
-        #     print(f"🌐 [Setup Agent] 'all' 키 저장 완료")
+        #     print(f"🌐 [Setup Agent] 'all' key saved successfully")
 
-    print("✅ [Setup Agent] 초기 설정 완료.")
+    print("✅ [Setup Agent] Initial setup completed.")
     yield
-    print("🤖 Proxy 서버 종료.")
+    print("🤖 Proxy server shutting down.")
 
 
 # ─────────────────────────────────────────────
-# 허용할 Mutation 목록 (captcha 통과 사용자)
-# 이 목록 외의 mutation은 all 키를 주입하지 않음
+# List of allowed mutations (for users who pass captcha)
+# Mutations outside this list will not have the 'all' key injected
 # ─────────────────────────────────────────────
 
 ALLOWED_MUTATIONS = {
-    "pages",       # 페이지 생성
-    "comments",     # 댓글 관련 (create, update, delete)
+    "pages",       # Page creation
+    "comments",     # Comment related (create, update, delete)
 }
 
 def is_allowed_mutation(query_str: str) -> bool:
@@ -355,7 +355,7 @@ app.state.challenges = {}
 async def proxy_to_wiki(request: Request, path: str):
     method_str = request.method.upper()
     captcha_passed = False
-    inject_all_key = False  # 'all' 키 주입 여부
+    inject_all_key = False  # Whether to inject 'all' key
 
     if method_str in ["POST", "PUT", "PATCH"]:
         is_bypassed = (
@@ -376,15 +376,14 @@ async def proxy_to_wiki(request: Request, path: str):
                 else:
                     queries = [body_json.get("query", "").strip().lower()]
 
-                # 모든 쿼리가 mutation이 아니면 bypass (단순 조회)
                 if all(not q.startswith("mutation") for q in queries):
                     is_bypassed = True
                 else:
-                    # mutation이지만 허용 목록에 없으면 captcha만 검증, 키는 주입 안 함
+                    # If it's a mutation but not in the allowed list, only verify captcha and don't inject key
                     inject_all_key = all(is_allowed_mutation(q) for q in queries if q.startswith("mutation"))
                     for q in queries:
                         if q.startswith("mutation"):
-                            print(f"🔍 [Proxy] mutation 내용: {q[:200]}")
+                            print(f"🔍 [Proxy] Mutation content: {q[:200]}")
                             print(f"🔍 [Proxy] inject_all_key: {inject_all_key}")
             except Exception:
                 pass
@@ -418,26 +417,26 @@ async def proxy_to_wiki(request: Request, path: str):
             del app.state.challenges[captcha_id]
             captcha_passed = True
 
-    # ── Wiki.js로 요청 전달
+    # ── Forwarding request to Wiki.js
     async with httpx.AsyncClient() as client:
         url = f"{WIKI_URL}/{path}"
         headers = dict(request.headers)
         headers.pop("host", None)
         headers.pop("content-length", None)
 
-        # # captcha 통과 + 허용된 mutation → 'all' API 키 주입
+        # # Captcha passed + allowed mutation → inject 'all' API key
         # if captcha_passed and inject_all_key:
         #     all_key = getattr(app.state, "wiki_all_key", None)
         #     if all_key:
         #         headers["Authorization"] = f"Bearer {all_key}"
-        #         print("🔑 [Proxy] captcha 통과 + 허용 mutation → 'all' 키 주입")
-        # 👇 이렇게 변경하세요! 👇
+        #         print("🔑 [Proxy] Captcha passed + allowed mutation → injecting 'all' key")
+        # 👇 Change to this! 👇
         if captcha_passed and inject_all_key:
             if BOT_API_KEY:
                 headers["Authorization"] = f"Bearer {BOT_API_KEY}"
-                print("🔑 [Proxy] captcha 통과 + 허용 mutation → '봇 API 키' 주입")
+                print("🔑 [Proxy] Captcha passed + allowed mutation → injecting 'Bot API key'")
             else:
-                print("⚠️ [Proxy] BOT_API_KEY 환경변수가 설정되지 않았습니다! (401 에러가 날 수 있습니다)")
+                print("⚠️ [Proxy] BOT_API_KEY environment variable is not set! (May result in 401 error)")
         try:
             internal_body = await request.body() if method_str != "GET" else None
             response = await client.request(
@@ -455,7 +454,7 @@ async def proxy_to_wiki(request: Request, path: str):
         except httpx.RequestError as exc:
             return JSONResponse(
                 status_code=502,
-                content={"detail": f"Wiki.js 접근 오류 (Gatekeeper): {exc}"}
+                content={"detail": f"Wiki.js access error (Gatekeeper): {exc}"}
             )
 
 
