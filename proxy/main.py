@@ -357,6 +357,8 @@ async def proxy_to_wiki(request: Request, path: str):
     captcha_passed = False
     inject_all_key = False  # Whether to inject 'all' key
 
+    internal_body = await request.body() if method_str != "GET" else None
+
     if method_str in ["POST", "PUT", "PATCH"]:
         is_bypassed = (
             request.headers.get("mymy-bypass-key") == BYPASS_KEY
@@ -364,12 +366,66 @@ async def proxy_to_wiki(request: Request, path: str):
             or path.startswith("_graphql_system")
         )
 
-        body = await request.body()
+        body = internal_body
 
         if not is_bypassed and path == "graphql":
             try:
                 import json
+                import re
                 body_json = json.loads(body)
+
+                # --- 📝 Inject Writer Info ---
+                x_forwarded_for = request.headers.get("x-forwarded-for")
+                client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "Unknown")
+                ip_parts = client_ip.split('.')
+                masked_ip = f"{ip_parts[0]}.{ip_parts[1]}.*.*" if len(ip_parts) == 4 else "***.***.*.*"
+                
+                custom_writer = request.headers.get("x-custom-writer")
+                if custom_writer:
+                    appended_info = f"\n\n---\n> ✍️ **Author:** {custom_writer} | **IP:** {masked_ip}"
+                else:
+                    appended_info = f"\n\n---\n> ✍️ **IP:** {masked_ip}"
+
+                def inject_into_query(query_str: str, info: str) -> str:
+                    block_match = re.search(r'content:\s*"""(.*?)"""', query_str, flags=re.DOTALL)
+                    if block_match:
+                        return query_str[:block_match.end(1)] + info + query_str[block_match.end(1):]
+                    
+                    normal_match = re.search(r'content:\s*"((?:\\.|[^"\\])*)"', query_str)
+                    if normal_match:
+                        info_escaped = info.replace('\n', '\\n').replace('"', '\\"')
+                        return query_str[:normal_match.end(1)] + info_escaped + query_str[normal_match.end(1):]
+                    return query_str
+
+                modified = False
+                
+                def process_graphql_item(item):
+                    nonlocal modified
+                    if not isinstance(item, dict): return item
+                    
+                    is_mut = item.get("query", "").strip().lower().startswith("mutation")
+                    if is_mut:
+                        if "variables" in item and isinstance(item["variables"], dict) and "content" in item["variables"]:
+                            item["variables"]["content"] += appended_info
+                            modified = True
+                        elif "query" in item and "content:" in item["query"]:
+                            original_q = item["query"]
+                            new_q = inject_into_query(original_q, appended_info)
+                            if new_q != original_q:
+                                item["query"] = new_q
+                                modified = True
+                    return item
+
+                if isinstance(body_json, list):
+                    body_json = [process_graphql_item(item) for item in body_json]
+                else:
+                    body_json = process_graphql_item(body_json)
+
+                if modified:
+                    body = json.dumps(body_json).encode("utf-8")
+                    internal_body = body
+                # -----------------------------
+
                 queries = []
                 if isinstance(body_json, list):
                     queries = [item.get("query", "").strip().lower() for item in body_json if isinstance(item, dict)]
@@ -438,7 +494,6 @@ async def proxy_to_wiki(request: Request, path: str):
             else:
                 print("⚠️ [Proxy] BOT_API_KEY environment variable is not set! (May result in 401 error)")
         try:
-            internal_body = await request.body() if method_str != "GET" else None
             response = await client.request(
                 request.method, url,
                 headers=headers,
