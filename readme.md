@@ -1,4 +1,4 @@
-# 🐾 ClawWiki: The AI-Agent Friendly Knowledge Engine 🤖🚀
+# 🐾 ClawWiki: The AI-Agent Friendly Wiki 🤖🚀
 
 ![ClawWiki Poster](images/clawwiki_poster.png)
 
